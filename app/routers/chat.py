@@ -10,6 +10,7 @@ router = APIRouter()
 async def chat_completions(request: ChatCompletionRequest):
     # Streaming is not implemented in this version, return 400 if requested
     if request.stream:
+        print("[Gateway] Rejecting request: Stream option enabled which is unsupported.")
         raise HTTPException(
             status_code=400,
             detail="Streaming responses are not supported in this version. Set stream=false."
@@ -18,6 +19,10 @@ async def chat_completions(request: ChatCompletionRequest):
     # Convert request messages to format expected by tokenizer
     messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
     
+    print(f"\n[Gateway] Received Chat Completion Request (Model: {request.model})")
+    print(f"[Gateway] Messages count: {len(messages_dict)}")
+    print(f"[Gateway] Parameters: Temp={request.temperature}, Top_P={request.top_p}, MaxTokens={request.max_tokens or 'Default'}")
+
     try:
         completion_text, prompt_tokens, completion_tokens = await qwen_service.generate_chat(
             messages=messages_dict,
@@ -25,6 +30,10 @@ async def chat_completions(request: ChatCompletionRequest):
             top_p=request.top_p,
             max_tokens=request.max_tokens
         )
+        
+        print(f"[Gateway] Inference Successful!")
+        print(f"[Gateway] Tokens -> Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {prompt_tokens + completion_tokens}")
+        print(f"[Gateway] Generated Response: {completion_text[:100]}...\n")
         
         # Check if the user wanted JSON format specifically
         # We process/ensure format if they asked or requested structured JSON
@@ -47,4 +56,5 @@ async def chat_completions(request: ChatCompletionRequest):
         return response
         
     except Exception as e:
+        print(f"[Gateway] Generation Failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
