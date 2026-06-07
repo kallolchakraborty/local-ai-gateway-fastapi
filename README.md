@@ -11,21 +11,86 @@ A FastAPI implementation of the OpenAI chat completions API specification, servi
 
 ## Setup & Running
 
-1. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Prerequisites & Installation
+Ensure you use a Python virtual environment to install the required packages:
+```bash
+# Create a virtual environment
+python3 -m venv .venv
 
-2. **Configure (Optional)**:
-   Modify the values inside `.env` to switch parameters like `PORT`, `API_KEY` authentication, or specify a custom device.
+# Activate the virtual environment
+source .venv/bin/activate
 
-   * **Model Download Behavior**: By default, the application will automatically download the Qwen 2.5 1.5B Instruct model (approx. 3GB) from Hugging Face Hub on the first startup. Subsequent runs will use the cached local copy offline.
-   * **Custom Local Model Path**: If you already have the model weights downloaded locally, you can change the `MODEL_ID` in `.env` to point to your absolute directory path (e.g. `MODEL_ID=/Users/username/models/Qwen2.5-1.5B-Instruct`) to load it instantly without any downloads.
+# Install dependencies
+pip install -r requirements.txt
+```
 
-3. **Start the server**:
-   ```bash
-   uvicorn app.main:app --host 127.0.0.1 --port 8000
-   ```
+### 2. Configuration (Optional)
+Modify the values inside `.env` to switch parameters like `PORT`, `API_KEY` authentication, or specify a custom device.
+* **Model Download Behavior**: By default, the application will automatically download the Qwen 2.5 1.5B Instruct model (approx. 3GB) from Hugging Face Hub on the first startup. Subsequent runs will use the cached local copy offline.
+* **Custom Local Model Path**: If you already have the model weights downloaded locally, you can change the `MODEL_ID` in `.env` to point to your absolute directory path (e.g. `MODEL_ID=/Users/username/models/Qwen2.5-1.5B-Instruct`) to load it instantly without any downloads.
+
+### 3. Starting the App
+Run the server using `uvicorn`:
+```bash
+# Ensure your virtual environment is active
+source .venv/bin/activate
+
+# Start the server
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+### 4. Stopping the App
+* **Foreground Process**: If running directly in your terminal, press `CTRL + C` to shut down the server safely.
+* **Background Process**: If running as a background task, locate the process ID and terminate it:
+```bash
+# Find the process running on port 8000
+lsof -i :8000
+
+# Kill the process using the PID found
+kill <PID>
+```
+
+---
+
+## How to Use the Gateway
+
+Once started, the gateway exposes endpoints identical to OpenAI's completion specs. You can request completions via `curl` or using official SDKs.
+
+### Option A: Using `curl`
+```bash
+curl -X POST http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen2.5-1.5b-instruct",
+    "messages": [
+      {"role": "user", "content": "Explain quantum computing in one sentence."}
+    ]
+  }'
+```
+
+### Option B: Using OpenAI Python SDK
+You can easily connect the official `openai` Python library by redirecting the `base_url`:
+
+```python
+from openai import OpenAI
+
+# Point client to the local gateway
+client = OpenAI(
+    base_url="http://127.0.0.1:8000/v1",
+    api_key="none"  # Or your custom API_KEY configured in .env
+)
+
+response = client.chat.completions.create(
+    model="qwen2.5-1.5b-instruct",
+    messages=[
+        {"role": "user", "content": "Explain quantum computing in one sentence."}
+    ]
+)
+
+print(response.choices[0].message.content)
+```
+
+---
 
 ## Example API Queries
 
