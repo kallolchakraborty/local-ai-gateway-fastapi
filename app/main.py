@@ -10,10 +10,14 @@ from app.models.response import OpenAIErrorResponse, OpenAIErrorDetail
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize/load model & tokenizer on startup
+    """
+    FastAPI Lifespan management. Handles code execution blocks that must run
+    during application startup (loading weights) and shutdown (clean execution pools).
+    """
+    # Initialize and pre-load Qwen model weights and tokenizer into RAM/VRAM
     qwen_service.initialize()
     yield
-    # Clean up executors
+    # Clean up and gracefully terminate thread executor pool to prevent resource leaks
     if hasattr(qwen_service, "executor"):
         qwen_service.executor.shutdown(wait=True)
 
@@ -24,7 +28,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Setup
+# CORS Setup - Enables external API query access from browser clients (e.g. playground applications)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,10 +40,15 @@ app.add_middleware(
 # Optional Bearer Token Security Middleware
 @app.middleware("http")
 async def verify_auth_token(request: Request, call_next):
-    # Skip auth for docs, health endpoint, etc
+    """
+    Custom HTTP Middleware. Intercepts incoming requests to validate authentication.
+    If API_KEY is defined in config, requests must present Header: 'Authorization: Bearer <API_KEY>'
+    """
+    # 1. Skip token authentication checks for public endpoints
     if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
         return await call_next(request)
         
+    # 2. Enforce Bearer Token check if configured in .env properties
     if settings.API_KEY:
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -68,9 +77,13 @@ async def verify_auth_token(request: Request, call_next):
             
     return await call_next(request)
 
-# Error handlers mapping standard exceptions to OpenAI style JSON error envelopes
+# Error Handlers mapping internal exceptions to OpenAI JSON Error format specs
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handles request formatting & Pydantic validation errors,
+    re-mapping them to OpenAI style 'invalid_request_error' objects.
+    """
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content=OpenAIErrorResponse(
@@ -85,6 +98,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
+    """
+    Catch-all internal server exceptions, returning a normalized OpenAI error payload
+    instead of exposing standard raw Python traceback dumps.
+    """
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=OpenAIErrorResponse(
